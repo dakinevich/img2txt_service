@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  img2txt:
+    build:
+      context: ./img2txt
+      dockerfile: Dockerfile
+    ports:
+      - "5050:5050"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+      
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    ports:
+      - "5051:5051"
+    volumes:
+      - img2txt_uploads:/app/static/uploads
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      
+  database:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: carddb
+      MYSQL_USER: carduser
+      MYSQL_PASSWORD: cardpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  db_data:
+  img2txt_uploads:

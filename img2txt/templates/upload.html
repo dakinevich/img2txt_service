@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Upload</title>
+</head>
+<body>
+    <h1>Загрузка изображения</h1>
+    <form id="upload-form">
+        <input type="file" name="file" accept="image/*" required>
+        <button type="submit">Загрузить</button>
+    </form>
+    <div id="result"></div>
+    
+    <script>
+        document.getElementById('upload-form').onsubmit = async function(event) {
+            event.preventDefault();
+
+            const formData = new FormData(this);
+            const response = await fetch('/image', {
+                method: 'POST',
+                body: formData
+            });
+
+            const resultDiv = document.getElementById('result');
+            if (response.ok) {
+                const data = await response.json();
+                resultDiv.innerHTML = `<h2>Ответ: ${data.caption}</h2>`;
+            } else {
+                resultDiv.innerHTML = `<h2>Ошибка: ${response.status}</h2>`;
+            }
+        };
+    </script>
+</body>
+</html>

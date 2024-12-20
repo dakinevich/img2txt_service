@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Карточки</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #343a40; /* Dark background */
+            color: #f8f9fa; /* Light text color */
+        }
+        h1, h2 {
+            color: #f8f9fa; /* Light text color */
+        }
+        form {
+            margin-bottom: 30px;
+        }
+        input[type="file"], input[type="text"] {
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            width: calc(100% - 22px);
+            margin-bottom: 10px;
+            background-color: #6c757d; /* Darker input background */
+            color: #f8f9fa; /* Light text color */
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .card {
+            background-color: #495057; /* Darker card background */
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+        }
+        .card img {
+            margin-right: 20px;
+            border-radius: 5px;
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+        }
+        .card p {
+            flex-grow: 1;
+            color: #f8f9fa; /* Light text color */
+        }
+        .card a {
+            color: #dc3545;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .card a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Fullscreen overlay styles */
+        .fullscreen-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column; /* Added to stack image and text vertically */
+            z-index: 1000;
+        }
+        .fullscreen-overlay img {
+            max-width: 90%;
+            max-height: 80%; /* Adjusted to leave space for text */
+            border-radius: 5px;
+        }
+        .fullscreen-overlay .description {
+            color: #f8f9fa;
+            margin-top: 20px;
+            text-align: center;
+            max-width: 90%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Создание карточек</h1>
+    <form id="upload-form" method="post" enctype="multipart/form-data">
+        <input type="file" name="images" id="image-input" accept=".jpg,.jpeg,.png,.heif,.heic" multiple required>
+        <button type="submit">Загрузить</button>
+    </form>
+    
+    <form id="search-form" method="get" action="{{ url_for('search') }}">
+        <input type="text" name="query" placeholder="Поиск по тексту карточки" required>
+        <button type="submit">Поиск</button>
+        <a href="{{ url_for('index') }}" style="margin-left: 10px; color: #007bff; text-decoration: none;">Показать все</a>
+    </form>
+
+    <h2>Карточки</h2>
+    <div id="cards-container">
+        {% for card in cards %}
+            <div class="card" id="card-{{ card.id }}">
+                <img src="{{ url_for('static', filename='uploads/' + card.image_filename) }}" alt="Image" style="width:100px;height:100px;">
+                <p class="description" id="description-{{ card.id }}">{{ card.description }}</p>
+                <a href="{{ url_for('delete', card_id=card.id) }}">Удалить</a>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- Fullscreen overlay -->
+    <div class="fullscreen-overlay" id="fullscreenOverlay">
+        <img id="fullscreenImage" src="" alt="Full Screen Image">
+        <p class="description" id="fullscreenDescription"></p>
+    </div>
+
+    <script>
+        const form = document.getElementById('upload-form');
+        const cardsContainer = document.getElementById('cards-container');
+
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(form);
+            const imageInput = document.getElementById('image-input');
+            const files = imageInput.files;
+
+            Array.from(files).forEach(file => {
+                const tempId = 'temp-' + Date.now() + Math.random();
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const cardDiv = document.createElement('div');
+                    cardDiv.className = 'card';
+                    cardDiv.id = `card-${tempId}`;
+                    cardDiv.innerHTML = `
+                        <img src="${e.target.result}" alt="Image" style="width:100px;height:100px;">
+                        <p class="description">Загрузка...</p>
+                        <a href="#">Удалить</a>
+                    `;
+                    cardsContainer.prepend(cardDiv);
+                };
+                reader.readAsDataURL(file);
+            });
+
+            fetch('/', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                data.forEach((item, index) => {
+                    const tempCard = document.getElementById(`card-temp-${index}`);
+                    if (tempCard) {
+                        tempCard.id = `card-${item.id}`;
+                        const deleteLink = tempCard.querySelector('a');
+                        deleteLink.href = `/delete/${item.id}`;
+                    }
+                    // Start polling for description
+                    checkDescription(item.id);
+                });
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+
+            form.reset();
+        });
+
+        function checkDescription(cardId) {
+            fetch(`/get_description/${cardId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const descriptionElement = document.getElementById(`description-${cardId}`);
+                    if (data.description !== 'Загрузка...') {
+                        descriptionElement.innerText = data.description;
+                    } else {
+                        setTimeout(() => checkDescription(cardId), 5000); // Retry after 5 seconds
+                    }
+                })
+                .catch(error => console.error('Error fetching description:', error));
+        }
+
+        // Fullscreen image functionality
+        const fullscreenOverlay = document.getElementById('fullscreenOverlay');
+        const fullscreenImage = document.getElementById('fullscreenImage');
+        const fullscreenDescription = document.getElementById('fullscreenDescription');
+
+        document.querySelectorAll('.card').forEach(card => {
+            const img = card.querySelector('img');
+            const description = card.querySelector('.description').textContent;
+
+            img.addEventListener('click', function() {
+                fullscreenImage.src = this.src;
+                fullscreenDescription.textContent = description;
+                fullscreenOverlay.style.display = 'flex';
+            });
+        });
+
+        fullscreenOverlay.addEventListener('click', function() {
+            fullscreenOverlay.style.display = 'none';
+        });
+    </script>
+</body>
+</html>
